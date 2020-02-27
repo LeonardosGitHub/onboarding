@@ -1,0 +1,210 @@
+{
+    "schemaVersion": "1.8.0",
+    "class": "Device",
+    "async": true,
+    "label": "vCMP guest build",
+    "Common": {
+        "class": "Tenant",
+        "mySystem": {
+            "class": "System",
+            "hostname": "{{DO_vars.hostname}}",
+            "cliInactivityTimeout": 900,
+            "consoleInactivityTimeout": 15
+        },
+        "myDns": {
+            "class": "DNS",
+            "nameServers": [
+                "8.8.8.8"
+            ]
+        },
+        "myNtp": {
+            "class": "NTP",
+            "servers": [
+                "{{DO_vars.ntpServers[0]}}",
+                "{{DO_vars.ntpServers[1]}}",
+                "{{DO_vars.ntpServers[2]}}"
+            ],
+            "timezone": "GMT"
+        },
+        "{{DO_vars.selfIPs.first.self.name}}": {
+            "class": "SelfIp",
+            "address": "{{DO_vars.selfIPs.first.self.address}}",
+            "allowService": "default",
+            "vlan": "{{DO_vars.selfIPs.first.self.vlan}}"
+        },
+        "{{DO_vars.selfIPs.first.float.name}}": {
+            "class": "SelfIp",
+            "address": "{{DO_vars.selfIPs.first.float.address}}",
+            "allowService": "default",
+            "vlan": "{{DO_vars.selfIPs.first.self.vlan}}",
+            "trafficGroup": "traffic-group-1"
+        },
+        "{{DO_vars.selfIPs.second.self.name}}": {
+            "class": "SelfIp",
+            "address": "{{DO_vars.selfIPs.second.self.address}}",
+            "allowService": "default",
+            "vlan": "{{DO_vars.selfIPs.second.self.vlan}}"
+        },
+        "{{DO_vars.selfIPs.second.float.name}}": {
+            "class": "SelfIp",
+            "address": "{{DO_vars.selfIPs.second.float.address}}",
+            "allowService": "default",
+            "vlan": "{{DO_vars.selfIPs.second.self.vlan}}",
+            "trafficGroup": "traffic-group-1"
+        },
+        "{{DO_vars.selfIPs.third.self.name}}": {
+            "class": "SelfIp",
+            "address": "{{DO_vars.selfIPs.third.self.address}}",
+            "allowService": "all",
+            "vlan": "{{DO_vars.selfIPs.third.self.vlan}}"
+        },
+        "default": {
+            "class": "Route",
+            "gw": "10.0.23.254",
+            "network": "default",
+            "mtu": 1500
+        },
+        "routeDomain0": {
+            "class": "RouteDomain",
+            "id": 0,
+            "routingProtocols": ["BGP"]
+        },
+        "myTacacs": {
+            "class": "Authentication",
+            "enabledSourceType": "tacacs",
+            "tacacs": {
+                "authentication": "use-all-servers",
+                "protocol": "ip",
+                "secret": "{{DO_vars.tacacs.secret}}",
+                "servers": ["{{DO_vars.tacacs.servers[0]}}", "{{DO_vars.tacacs.servers[1]}}"],
+                "service": "ppp"
+            }
+        },
+        "RW": {
+            "class": "RemoteAuthRole",
+            "attribute": "F5-LTM-User-Info-1=RW",
+            "console": "tmsh",
+            "lineOrder": 1,
+            "role": "admin",
+            "remoteAccess": true,
+            "userPartition": "all"
+        },
+        "mySnmpAgent": {
+            "class": "SnmpAgent",
+            "contact": "{{DO_vars.snmpAgent.contact}}",
+            "location": "{{DO_vars.snmpAgent.location}}",
+            "allowList": [
+                "{{DO_vars.snmpAgent.allowList[0]}}",
+                "{{DO_vars.snmpAgent.allowList[1]}}",
+                "{{DO_vars.snmpAgent.allowList[2]}}",
+                "{{DO_vars.snmpAgent.allowList[3]}}"
+            ]
+        },
+        "smmpCommunity1": {
+            "class": "SnmpCommunity",
+            "source": "all"
+        },
+        "snmpCommmunity2": {
+            "class": "SnmpCommunity",
+            "source": "all",
+            "access": "rw"
+        },
+        "myTrapDestination_1": {
+            "class": "SnmpTrapDestination",
+            "community": "snmpCommmunity1",
+            "destination": "10.6.1.1",
+            "version": "2c",
+            "port": 162,
+            "network": "other"
+        },
+        "myTrapDestination_2": {
+            "class": "SnmpTrapDestination",
+            "community": "snmpCommmunity1",
+            "destination": "10.7.1.1",
+            "version": "2c",
+            "port": 162,
+            "network": "other"
+        },
+        "myTrapEvents": {
+            "class": "SnmpTrapEvents",
+            "agentStartStop": true,
+            "device": true
+        },
+        "sshSettings": {
+            "class": "SSHD",
+            "banner": "This system (including all hardware, software, and peripheral equipment) is private property.",
+            "inactivityTimeout": 900
+        },
+        "remotesyslog1": {
+            "class": "SyslogRemoteServer",
+            "host": "10.8.1.1"
+        },
+        "remotesyslog2": {
+            "class": "SyslogRemoteServer",
+            "host": "10.9.1.1"
+        },
+        "configSync": {
+            "class": "ConfigSync",
+            "configsyncIp": "/Common/{{DO_vars.selfIPs.second.self.name}}/address"
+        },
+        "failoverAddress": {
+            "class": "FailoverUnicast",
+            "address": "/Common/{{DO_vars.selfIPs.first.self.name}}/address"
+        },
+        "httpdSettings": {
+            "class": "HTTPD",
+            "allow": [
+                "10.0.0.0/8",
+                "172.16.0.0/12",
+                "192.168.0.0/16"
+            ],
+            "sslCiphersuite": [
+                "ECDHE-RSA-AES256-GCM-SHA384",
+                "ECDHE-RSA-AES256-SHA384",
+                "DHE-RSA-AES256-GCM-SHA384",
+                "DHE-RSA-AES256-SHA256",
+                "DHE-RSA-AES256-SHA",
+                "ECDH-RSA-AES256-GCM-SHA384",
+                "ECDH-RSA-AES256-SHA384",
+                "ECDH-RSA-AES256-SHA",
+                "AES256-GCM-SHA384",
+                "AES256-SHA256",
+                "AES256-SHA"
+            ],
+            "sslProtocol": "TLSv1.2"
+        },
+        "mydbvars": {
+            "class": "DbVariables",
+            "ui.system.preferences.recordsperscreen": "100",
+            "ui.system.preferences.startscreen": "network_map",
+            "config.auditing.forward.destination": "10.10.1.1",
+            "config.auditing.forward.sharedsecret": "<secret>",
+            "config.auditing.forward.type": "tacacs+",
+            "config.auditing": "enable",
+            "tm.fw.defaultrule.log": "enable",
+            "tm.fw.globaldefaultrule.log": "enable",
+            "tm.fw.stageddefaultrule.log": "enable",
+            "tm.fw.stagedglobaldefaultrule.log": "enable",
+            "statemirror.clustermirroring": "between"
+        },
+        "failoverGroup": {
+            "class": "DeviceGroup",
+            "type": "sync-failover",
+            "members": ["{{DO_vars.trusthostname}}", "{{DO_vars.trustremoteHostname}}"],
+            "owner": "/Common/failoverGroup/members/0",
+            "autoSync": true,
+            "saveOnAutoSync": false,
+            "networkFailover": true,
+            "fullLoadOnSync": false,
+            "asmSync": false
+        },
+        "myDeviceTrust": {
+            "class": "DeviceTrust",
+            "localPassword": "{{bigip_password}}",
+            "localUsername": "{{bigip_username}}",
+            "remoteHost": "{{DO_vars.trustremote}}",
+            "remotePassword": "{{bigip_password}}",
+            "remoteUsername":"{{bigip_username}}"
+        }
+    }
+}

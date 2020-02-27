@@ -1,0 +1,581 @@
+---  
+- name: Declarative Onboarding Demo - initial builds and upgrades
+  
+  hosts: localhost
+  gather_facts: no
+  vars:
+    bigip_password: admin
+    bigip_root_password: default
+    bigip_username: admin
+    bigip_port: 443
+    bigip_ip_host1: 10.146.141.36
+    bigip_ip_guest1: 10.146.142.10
+    bigip_ip_guest2: 10.146.142.11
+    bigip_ip_guest3: 10.146.142.12
+    bigip_ip_guest4: 10.146.142.13
+    guest1_hostname: guest1.example.com
+    guest2_hostname: guest2.example.com
+    guest3_hostname: guest3.example.com
+    guest4_hostname: guest4.example.com
+    bigip_imagev13: BIGIP-13.1.1.5-0.0.4.iso
+    bigip_imagev15: BIGIP-15.1.0.1-0.0.4.iso
+    bigip_image_hotfix: Hotfix-BIGIP-13.1.1.5.0.217.4-ENG.iso
+    DO_rpm: f5-declarative-onboarding-1.10.0-2.noarch.rpm
+    as3_rpm: f5-appsvcs-3.17.1-1.noarch.rpm
+
+  tasks:
+
+  - name: Remove previous keys from ssh file
+    lineinfile:
+      path: ~/.ssh/known_hosts
+      regexp: '10.146.142.1[2-3]'
+      line: 
+        - 10.146.142.12
+        - 10.146.142.13
+      create: no
+      state: absent
+    delegate_to: localhost
+
+  - name: Waits for port 22 to be available on guests
+    wait_for:
+      host: "{{item}}"
+      port: 22
+      delay: 10
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: Update passwords on new guests
+    expect:
+      command: "ssh -oStrictHostKeyChecking=no root@{{item}}"
+      timeout: 10
+      echo: yes
+      responses:
+        "(?i)Password:": "default"
+        (?i)(current) UNIX password: "default"
+        New BIG-IP password: "{{bigip_root_password}}"
+        Retype new BIG-IP password: "{{bigip_root_password}}"
+        root@guest.:Active:Standalone:
+            - "tmsh modify auth user admin password {{bigip_password}} shell tmsh"
+            - "exit"
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    ignore_errors: yes
+    become: no
+    delegate_to: localhost
+
+  - name: Wait 15 seconds before checking if BIG-IP is ready
+    pause:
+      seconds: 15
+
+  - name: "Wait a maximum of 300 seconds for BIG-IPs to be ready to take configuration"
+    bigip_wait:
+      timeout: 300
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: "Upload and install DO rpm to guests"
+    bigip_lx_package:
+      package: "../rpms/{{DO_rpm}}"
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: Wait 15 seconds before checking if BIG-IP is ready
+    pause:
+      seconds: 15
+
+  - name: "Wait a maximum of 300 seconds for BIG-IPs to be ready to take configuration"
+    bigip_wait:
+      timeout: 300
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: "Upload and install AS3 rpm to guests"
+    bigip_lx_package:
+      package: "../rpms/{{as3_rpm}}"
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: "BIG-IP Command - turboflex profile"
+    bigip_command:
+      commands:
+        - "modify sys turboflex profile-config type turboflex-security-v1" #v15
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: "Provision afm"
+    bigip_provision:
+      module: afm
+      level: nominal
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: "Provision avr"
+    bigip_provision:
+      module: avr
+      level: nominal
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: "Wait a maximum of 300 seconds for BIG-IPs to be ready to take configuration"
+    bigip_wait:
+      timeout: 300
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: "BIG-IP Command on guests - pre-DO"
+    bigip_command:
+      commands:
+        - "modify cli preference prompt { host user status current-folder config-sync-status }"
+        - "modify cli global-settings service number"
+        - "modify sys software update auto-check disabled"
+        - "modify sys sshd allow replace-all-with { 10.0.0.0/255.0.0.0 192.168.0.0/255.255.0.0 172.16.0.0/255.240.0.0}"
+        - "modify sys global-settings gui-security-banner-text \"************************************************************************************ This system (including all hardware, software, and peripheral equipment) is private property. ************************************************************************************\""
+        - "modify sys global-settings gui-security-banner enabled"
+        - "modify sys global-settings remote-host add {guest3.example.com {hostname guest3.example.com addr 10.146.142.12}}"
+        - "modify sys global-settings remote-host add {guest4.example.com {hostname guest4.example.com addr 10.146.142.13}}"
+        - "run /util bash -c \"bigstart remove named\""
+        - "run /util bash -c \"bigstart remove zxfrd\""
+        - "run /util bash -c \"openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -subj '/C=US/ST=OH/L=Columbus/O=My Company/OU=Network Services/CN=`uname -n`' -keyout /config/httpd/conf/ssl.key/server.key -out /config/httpd/conf/ssl.crt/server.crt -sha256\""
+        - "run /util bash -c \"cat /config/httpd/conf/ssl.crt/server.crt > /config/big3d/client.crt\""
+        - "run /util bash -c \"cat /config/httpd/conf/ssl.crt/server.crt > /config/gtm/server.crt\""
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: "REST call DO declaration guest4"
+    uri:
+      url: "https://{{bigip_ip_guest4}}:{{bigip_port}}/mgmt/shared/declarative-onboarding"
+      method: POST
+      body: "{{ lookup('template','../templates/DO_declaration_template_guest_BIG-IP.json') }}"
+      headers:
+        Content-Type: "application/json"
+      return_content: yes
+      body_format: json
+      status_code: 202
+      url_username: "{{bigip_username}}"
+      url_password: "{{bigip_password}}"
+      force_basic_auth: yes
+      validate_certs: no
+    register: DO_output
+    vars:
+      DO_vars:
+        hostname: "guest4.example.com"
+        trusthostname: "guest3.example.com"
+        trustremoteHostname: "guest4.example.com"
+        trustremote: "/Common/failoverGroup/members/0"
+        remotehost: "10.146.142.12"
+        ntpServers:
+          - 45.33.103.94
+          - 72.87.88.202
+          - 129.250.35.251
+        selfIPs:
+          first:
+            self: 
+              name: VLAN33
+              address: 10.0.23.252/24
+              vlan: VLAN33
+            float:
+              name: VLAN33-Floating
+              address: 10.0.23.253/24
+              vlan: VLAN33
+          second:
+            self: 
+              name: VLAN34
+              address: 10.0.24.252/24
+              vlan: VLAN34
+            float:
+              name: VLAN34-Floating
+              address: 10.0.24.253/24
+              vlan: VLAN34
+          third:
+            self: 
+              name: Failover
+              address: 10.4.4.2/30
+              vlan: Failover-57_58
+            float:
+              name: 
+              address: 
+              vlan: 
+        tacacs:
+          servers:
+            - 10.4.1.1
+            - 10.5.1.1
+          secret: secret
+        snmpAgent:
+          contact: NOC 877-555-5555
+          location: DataCenter3.0, Location Datacenter vCMP Guest
+          allowList:
+            - 10.1.1.0/24
+            - 10.2.2.0/24
+            - 10.3.3.0/24
+            - 10.4.4.0/24
+    delegate_to: localhost
+
+  - set_fact:
+      DO_taskID_guest2: "{{ DO_output.json.selfLink.split('/')[-1] }}"
+
+  - name: "REST call DO declaration guest3"
+    uri:
+      url: "https://{{bigip_ip_guest3}}:{{bigip_port}}/mgmt/shared/declarative-onboarding"
+      method: POST
+      body: "{{ lookup('template','../templates/DO_declaration_template_guest_BIG-IP.json') }}"
+      headers:
+        Content-Type: "application/json"
+      return_content: yes
+      body_format: json
+      status_code: 202
+      url_username: "{{bigip_username}}"
+      url_password: "{{bigip_password}}"
+      force_basic_auth: yes
+      validate_certs: no
+    register: DO_output
+    vars:
+      DO_vars:
+        hostname: "guest3.example.com"
+        trusthostname: "guest3.example.com"
+        trustremoteHostname: "guest4.example.com"
+        trustremote: "/Common/failoverGroup/members/1"
+        ntpServers:
+          - 45.33.103.94
+          - 72.87.88.202
+          - 129.250.35.251
+        selfIPs:
+          first:
+            self: 
+              name: VLAN33
+              address: 10.0.23.251/24
+              vlan: VLAN33
+            float:
+              name: VLAN33-Floating
+              address: 10.0.23.253/24
+              vlan: VLAN33
+          second:
+            self: 
+              name: VLAN34
+              address: 10.0.24.251/24
+              vlan: VLAN34
+            float:
+              name: VLAN34-Floating
+              address: 10.0.24.253/24
+              vlan: VLAN34
+          third:
+            self: 
+              name: Failover
+              address: 10.4.4.1/30
+              vlan: Failover-57_58
+            float:
+              name: 
+              address: 
+              vlan: 
+        tacacs:
+          servers:
+            - 10.4.1.1
+            - 10.5.1.1
+          secret: secret
+        snmpAgent:
+          contact: NOC 877-555-5555
+          location: DataCenter3.0, Location Datacenter vCMP Guest
+          allowList:
+            - 10.1.1.0/24
+            - 10.2.2.0/24
+            - 10.3.3.0/24
+            - 10.4.4.0/24
+    delegate_to: localhost
+
+  - set_fact:
+      DO_taskID_guest1: "{{ DO_output.json.selfLink.split('/')[-1] }}"
+
+
+  - name: Wait a maximum of 300 seconds for guests to be ready to take configuration after initial DO POST
+    bigip_wait:
+      timeout: 300
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: "REST to check for Successfull DO Declaration guest4"
+    uri:
+      url: "https://{{bigip_ip_guest4}}:{{bigip_port}}/mgmt/shared/declarative-onboarding/task/{{DO_taskID_guest2}}"
+      method: GET
+      return_content: yes
+      status_code: [200, 202]
+      url_username: "{{bigip_username}}"
+      url_password: "{{bigip_password}}"
+      force_basic_auth: yes
+      validate_certs: no
+    register: DO_task_check
+    until: DO_task_check.json.result.message.find("success") != -1
+    #until: ('status' in result) and (DO_task_check) and (DO_task_check.json.result.message.find("success") != -1)
+    retries: 40
+    delay: 15
+
+  - name: "REST to check for Successfull DO Declaration guest3"
+    uri:
+      url: "https://{{bigip_ip_guest3}}:{{bigip_port}}/mgmt/shared/declarative-onboarding/task/{{DO_taskID_guest1}}"
+      method: GET
+      return_content: yes
+      status_code: [200, 202]
+      url_username: "{{bigip_username}}"
+      url_password: "{{bigip_password}}"
+      force_basic_auth: yes
+      validate_certs: no
+    register: DO_task_check
+    until: DO_task_check.json.result.message.find("success") != -1
+    retries: 40
+    delay: 15
+    delegate_to: localhost
+
+  - name: "REST call DO declaration guest3, second POST"
+    uri:
+      url: "https://{{bigip_ip_guest3}}:{{bigip_port}}/mgmt/shared/declarative-onboarding"
+      method: POST
+      body: "{{ lookup('template','../templates/DO_declaration_template_guest_BIG-IP.json') }}"
+      headers:
+        Content-Type: "application/json"
+      return_content: yes
+      body_format: json
+      status_code: 202
+      url_username: "{{bigip_username}}"
+      url_password: "{{bigip_password}}"
+      force_basic_auth: yes
+      validate_certs: no
+    register: DO_output
+    vars:
+      DO_vars:
+        hostname: "guest3.example.com"
+        trusthostname: "guest3.example.com"
+        trustremoteHostname: "guest4.example.com"
+        trustremote: "/Common/failoverGroup/members/1"
+        ntpServers:
+          - 45.33.103.94
+          - 72.87.88.202
+          - 129.250.35.251
+        selfIPs:
+          first:
+            self: 
+              name: VLAN33
+              address: 10.0.23.251/24
+              vlan: VLAN33
+            float:
+              name: VLAN33-Floating
+              address: 10.0.23.253/24
+              vlan: VLAN33
+          second:
+            self: 
+              name: VLAN34
+              address: 10.0.24.251/24
+              vlan: VLAN34
+            float:
+              name: VLAN34-Floating
+              address: 10.0.24.253/24
+              vlan: VLAN34
+          third:
+            self: 
+              name: Failover
+              address: 10.4.4.1/30
+              vlan: Failover-57_58
+            float:
+              name: 
+              address: 
+              vlan: 
+        tacacs:
+          servers:
+            - 10.4.1.1
+            - 10.5.1.1
+          secret: secret
+        snmpAgent:
+          contact: NOC 877-555-5555
+          location: DataCenter3.0, Location Datacenter vCMP Guest
+          allowList:
+            - 10.1.1.0/24
+            - 10.2.2.0/24
+            - 10.3.3.0/24
+            - 10.4.4.0/24
+    delegate_to: localhost
+
+  - name: "Wait a maximum of 300 seconds for guests to be ready"
+    bigip_wait:
+      timeout: 300
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - set_fact:
+      DO_taskID: "{{ DO_output.json.selfLink.split('/')[-1] }}"
+
+  - name: "REST to check for Successfull DO Declaration"
+    uri:
+      url: "https://{{bigip_ip_guest3}}:{{bigip_port}}/mgmt/shared/declarative-onboarding/task/{{DO_taskID}}"
+      method: GET
+      return_content: yes
+      status_code: [200, 202]
+      url_username: "{{bigip_username}}"
+      url_password: "{{bigip_password}}"
+      force_basic_auth: yes
+      validate_certs: no
+    register: DO_task_check
+    until: DO_task_check.json.result.message.find("success") != -1
+    retries: 40
+    delay: 15
+    delegate_to: localhost
+
+  - name: "BIG-IP imish config guests"
+    bigip_imish_config:
+      lines:
+        - no service password-encryption
+        - log file /var/log/zebos.log
+        - no banner motd
+        - bgp extended-asn-cap 
+        - router bgp 65003
+        - bgp router-id 10.144.30.36
+        - bgp graceful-restart restart-time 120
+        - redistribute kernel route-map RM_RHI_PREFIX_LIST
+        - timers bgp 15 45
+        - neighbor PG_ACI_Fabric_IN peer-group
+        - neighbor PG_ACI_Fabric_IN soft-reconfiguration inbound
+        - neighbor PG_ACI_Fabric_IN route-map RM_F5-to-INSIDE out
+        - neighbor PG_ACI_Fabric_IN remote-as 65264
+        - neighbor PG_ACI_Fabric_OUT peer-group
+        - neighbor PG_ACI_Fabric_OUT soft-reconfiguration inbound
+        - neighbor PG_ACI_Fabric_OUT route-map  RM_F5-to-OUTSIDE out
+        - neighbor PG_ACI_Fabric_OUT remote-as 65001
+        - neighbor 10.138.153.109 peer-group PG_ACI_Fabric_OUT
+        - neighbor 10.138.153.109 description outside_peering
+        - neighbor 10.138.153.110 peer-group PG_ACI_Fabric_OUT
+        - neighbor 10.138.153.110 description outside_peering
+        - neighbor 10.138.153.125 peer-group PG_ACI_Fabric_IN
+        - neighbor 10.138.153.125 description inside_peering
+        - neighbor 10.138.153.126 peer-group PG_ACI_Fabric_IN
+        - neighbor 10.138.153.126 description inside_peering
+        - ip as-path access-list AL_F5-to-INSIDE permit ^65001 *
+        - ip as-path access-list AL_F5-to-OUTSIDE permit ^$
+        - ip as-path access-list AL_F5-to-OUTSIDE permit ^65264$
+        - ip prefix-list PL_RHI_VIP_NETWORKS seq 10 permit 169.24.134.0/25 ge 32
+        - route-map RM_F5-to-OUTSIDE permit 10
+        -  match as-path AL_F5-to-OUTSIDE
+        - route-map RM_F5-to-INSIDE permit 10
+        -  match as-path AL_F5-to-INSIDE
+        - route-map RM_RHI_PREFIX_LIST permit 50
+        -  match ip address prefix-list PL_RHI_VIP_NETWORKS
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+  - name: "REST call AS3 declaration guests"
+    uri:
+      url: "https://{{item}}:{{bigip_port}}/mgmt/shared/appsvcs/declare"
+      method: POST
+      body: "{{lookup('file','../templates/as3Declaration.json')}}"
+      headers:
+        Content-Type: "application/json"
+      return_content: yes
+      body_format: json
+      status_code: 200
+      url_username: "{{bigip_username}}"
+      url_password: "{{bigip_password}}"
+      force_basic_auth: yes
+      validate_certs: no
+    with_items:
+      - "{{bigip_ip_guest3}}"
+      - "{{bigip_ip_guest4}}"
+    delegate_to: localhost
+
+
+
+
+

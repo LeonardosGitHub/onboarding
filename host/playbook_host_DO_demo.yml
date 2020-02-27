@@ -1,0 +1,234 @@
+---  
+- name: Declarative Onboarding Demo - initial builds and upgrades
+  
+  hosts: localhost
+  gather_facts: no
+  vars:
+    bigip_password: admin
+    bigip_username: admin
+    bigip_port: 443
+    bigip_ip_host1: 10.146.141.36
+    bigip_ip_guest1: 10.146.142.10
+    bigip_ip_guest2: 10.146.142.11
+    bigip_ip_guest3: 10.146.142.12
+    bigip_ip_guest4: 10.146.142.13
+    guest1_hostname: guest1.example.com
+    guest2_hostname: guest2.example.com
+    guest3_hostname: guest3.example.com
+    guest4_hostname: guest4.example.com
+    bigip_imagev13: BIGIP-13.1.1.5-0.0.4.iso
+    bigip_imagev15: BIGIP-15.1.0.1-0.0.4.iso
+    bigip_image_hotfix: Hotfix-BIGIP-13.1.1.5.0.217.4-ENG.iso
+    DO_rpm: f5-declarative-onboarding-1.10.0-2.noarch.rpm
+    as3_rpm: f5-appsvcs-3.17.1-1.noarch.rpm
+
+  tasks:
+
+  - name: "Provision vCMP on host"
+    bigip_provision:
+      module: vcmp
+      level: dedicated
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_host1}}"
+    delegate_to: localhost
+
+  - name: "Upload and install DO rpm to guests"
+    bigip_lx_package:
+      package: "../rpms/{{DO_rpm}}"
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_host1}}"
+    delegate_to: localhost
+
+  - name: "BIG-IP Command on hosts - pre-DO"
+    bigip_command:
+      commands:
+        - "modify cli preference prompt { host user status current-folder config-sync-status }"
+        - "modify cli global-settings service number"
+        - "modify sys software update auto-check disabled"
+        - "modify sys sshd allow replace-all-with { 10.0.0.0/255.0.0.0 192.168.0.0/255.255.0.0 172.16.0.0/255.240.0.0}"
+        - "modify sys global-settings gui-security-banner-text \"************************************************************************************ This system (including all hardware, software, and peripheral equipment) is private property. ************************************************************************************\""
+        - "modify sys global-settings gui-security-banner enabled"
+        - "run /util bash -c \"bigstart remove named\""
+        - "run /util bash -c \"bigstart remove zxfrd\""
+        - "run /util bash -c \"openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -subj '/C=US/ST=OH/L=Columbus/O=My Company/OU=Network Services/CN=`uname -n`' -keyout /config/httpd/conf/ssl.key/server.key -out /config/httpd/conf/ssl.crt/server.crt -sha256\""
+        - "run /util bash -c \"cat /config/httpd/conf/ssl.crt/server.crt > /config/big3d/client.crt\""
+        - "run /util bash -c \"cat /config/httpd/conf/ssl.crt/server.crt > /config/gtm/server.crt\""
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_host1}}"
+    delegate_to: localhost
+
+  - name: "REST call DO declaration on host1"
+    uri:
+      url: "https://{{bigip_ip_host1}}:{{bigip_port}}/mgmt/shared/declarative-onboarding"
+      method: POST
+      body: "{{ lookup('template','../templates/DO_declaration_template_host_BIG-IP.json') }}"
+      headers:
+        Content-Type: "application/json"
+      return_content: yes
+      body_format: json
+      status_code: 202
+      url_username: "{{bigip_username}}"
+      url_password: "{{bigip_password}}"
+      force_basic_auth: yes
+      validate_certs: no
+    register: DO_output
+    vars:
+      DO_vars:
+        hostname: host1.example.com
+        ntpServers:
+          - 45.33.103.94
+          - 72.87.88.202
+          - 129.250.35.251
+        tacacs:
+          servers:
+            - 10.4.1.1
+            - 10.5.1.1
+          secret: secret
+        snmpAgent:
+          contact: NOC 877-555-5555
+          location: DataCenter3.0, Location Datacenter vCMP Host
+          allowList:
+            - 10.1.1.0/24
+            - 10.2.2.0/24
+            - 10.3.3.0/24
+            - 10.4.4.0/24
+    delegate_to: localhost
+
+  - set_fact:
+      DO_taskID_host1: "{{ DO_output.json.selfLink.split('/')[-1] }}"
+
+  - name: Wait a maximum of 300 seconds for hosts to be ready to take configuration after DO POST
+    bigip_wait:
+      timeout: 300
+      provider:
+        server: "{{item}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    with_items:
+      - "{{bigip_ip_host1}}"
+    delegate_to: localhost
+
+  - name: "REST to check for Successfull DO Declaration host1"
+    uri:
+      url: "https://{{bigip_ip_host1}}:{{bigip_port}}/mgmt/shared/declarative-onboarding/task/{{DO_taskID_host1}}"
+      method: GET
+      return_content: yes
+      status_code: [200, 202]
+      url_username: "{{bigip_username}}"
+      url_password: "{{bigip_password}}"
+      force_basic_auth: yes
+      validate_certs: no
+    register: DO_task_check
+    until: DO_task_check.json.result.message.find("success") != -1
+    retries: 40
+    delay: 15
+
+  - name: Create a vCMP guest1 on host1
+    bigip_vcmp_guest:
+      name: "{{guest1_hostname}}"
+      mgmt_network: bridged
+      mgmt_address: "{{bigip_ip_guest1}}/24"
+      mgmt_route: 10.146.142.254
+      vlans:
+        - VLAN33
+        - VLAN34
+        - Failover-57_58
+      cores_per_slot: 2
+      initial_image: "{{bigip_imagev13}}"
+      initial_hotfix: "{{bigip_image_hotfix}}"
+      state: present
+      provider:
+        server: "{{bigip_ip_host1}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    delegate_to: localhost
+
+  - name: Create a vCMP guest2 on host1
+    bigip_vcmp_guest:
+      name: "{{guest2_hostname}}"
+      mgmt_network: bridged
+      mgmt_address: "{{bigip_ip_guest2}}/24"
+      mgmt_route: 10.146.142.254
+      vlans:
+        - VLAN33
+        - VLAN34
+        - Failover-57_58
+      cores_per_slot: 2
+      initial_image: "{{bigip_imagev13}}"
+      initial_hotfix: "{{bigip_image_hotfix}}"
+      state: present
+      provider:
+        server: "{{bigip_ip_host1}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    delegate_to: localhost
+
+  - name: Create a vCMP guest3 on host1
+    bigip_vcmp_guest:
+      name: "{{guest3_hostname}}"
+      mgmt_network: bridged
+      mgmt_address: "{{bigip_ip_guest3}}/24"
+      mgmt_route: 10.146.142.254
+      vlans:
+        - VLAN33
+        - VLAN34
+        - Failover-57_58
+      cores_per_slot: 2
+      initial_image: "{{bigip_imagev15}}"
+      state: present
+      provider:
+        server: "{{bigip_ip_host1}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    delegate_to: localhost
+
+  - name: Create a vCMP guest4 on host1
+    bigip_vcmp_guest:
+      name: "{{guest4_hostname}}"
+      mgmt_network: bridged
+      mgmt_address: "{{bigip_ip_guest4}}/24"
+      mgmt_route: 10.146.142.254
+      vlans:
+        - VLAN33
+        - VLAN34
+        - Failover-57_58
+      cores_per_slot: 2
+      initial_image: "{{bigip_imagev15}}"
+      state: present
+      provider:
+        server: "{{bigip_ip_host1}}"
+        password: "{{bigip_password}}"
+        user: "{{bigip_username}}"
+        server_port: "{{bigip_port}}"
+        validate_certs: no
+    delegate_to: localhost
+
+
+
+

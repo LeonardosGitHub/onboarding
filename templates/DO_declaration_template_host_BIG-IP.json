@@ -1,0 +1,220 @@
+{
+    "schemaVersion": "1.9.0",
+    "class": "Device",
+    "async": true,
+    "label": "Hypervisor Build",
+    "Common": {
+        "class": "Tenant",
+        "hostname": "{{DO_vars.hostname}}",
+        "myDns": {  
+            "class": "DNS",
+            "nameServers": ["8.8.8.8"]
+        },
+        "myNtp": {
+            "class": "NTP",
+            "servers": [
+                "{{DO_vars.ntpServers[0]}}",
+                "{{DO_vars.ntpServers[1]}}",
+                "{{DO_vars.ntpServers[2]}}"
+            ],
+            "timezone": "GMT"
+        },
+        "Production-Po100": {
+            "class": "Trunk",
+            "interfaces": [
+                "3.0"
+            ],
+            "lacpEnabled": true
+
+        },
+        "Failover": {
+            "class": "Trunk",
+            "interfaces": [
+                "1.0"
+            ],
+            "lacpEnabled": true
+
+        },
+        "VLAN33": {
+            "class": "VLAN",
+            "tag": 3123,
+            "interfaces": [
+                {
+                    "name": "Production-Po100",
+                    "tagged": true
+                }
+            ]
+        },
+        "VLAN30": {
+            "class": "VLAN",
+            "tag": 30,
+            "interfaces": [
+                {
+                    "name": "Production-Po100",
+                    "tagged": true
+                }
+            ]
+        },
+        "VLAN34": {
+            "class": "VLAN",
+            "tag": 3124,
+            "interfaces": [
+                {
+                    "name": "Production-Po100",
+                    "tagged": true
+                }
+            ]
+        },
+        "VLAN31": {
+            "class": "VLAN",
+            "tag": 31,
+            "interfaces": [
+                {
+                    "name": "Production-Po100",
+                    "tagged": true
+                }
+            ]
+        },
+        "Failover-57_58": {
+            "class": "VLAN",
+            "tag": 4057,
+            "interfaces": [
+                {
+                    "name": "Failover",
+                    "tagged": true
+                }
+            ]
+        },
+        "Failover-59_60": {
+            "class": "VLAN",
+            "tag": 4059,
+            "interfaces": [
+                {
+                    "name": "Failover",
+                    "tagged": true
+                }
+            ]
+        },
+        "Native": {
+            "class": "VLAN",
+            "tag": 10,
+            "interfaces": [
+                {
+                    "name": "Production-Po100",
+                    "tagged": false
+                }
+            ]
+        },
+        "myTacacs": {
+            "class": "Authentication",
+            "enabledSourceType": "tacacs",
+            "tacacs": {
+                "authentication": "use-all-servers",
+                "protocol": "ip",
+                "secret": "{{DO_vars.tacacs.secret}}",
+                "servers": ["{{DO_vars.tacacs.servers[0]}}", "{{DO_vars.tacacs.servers[1]}}"],
+                "service": "ppp"
+            }
+        },
+        "RW": {
+            "class": "RemoteAuthRole",
+            "attribute": "F5-LTM-User-Info-1=RW",
+            "console": "tmsh",
+            "lineOrder": 1,
+            "role": "admin",
+            "remoteAccess": true,
+            "userPartition": "all"
+        },
+        "mydbvars": {
+            "class": "DbVariables",
+            "ui.system.preferences.recordsperscreen": "100",
+            "ui.system.preferences.startscreen": "network_map",
+            "config.auditing.forward.destination": "10.10.1.1",
+            "config.auditing.forward.sharedsecret": "<secret>",
+            "config.auditing.forward.type": "tacacs+",
+            "config.auditing": "enable"
+        },
+        "mySnmpAgent": {
+            "class": "SnmpAgent",
+            "contact": "{{DO_vars.snmpAgent.contact}}",
+            "location": "{{DO_vars.snmpAgent.location}}",
+            "allowList": [
+                "{{DO_vars.snmpAgent.allowList[0]}}",
+                "{{DO_vars.snmpAgent.allowList[1]}}",
+                "{{DO_vars.snmpAgent.allowList[2]}}",
+                "{{DO_vars.snmpAgent.allowList[3]}}"
+            ]
+        },
+        "snmpCommunity1": {
+            "class": "SnmpCommunity",
+            "source": "all"
+        },
+        "snmpCommunity2": {
+            "class": "SnmpCommunity",
+            "source": "all",
+            "access": "rw"
+        },
+        "myTrapDestination_1": {
+            "class": "SnmpTrapDestination",
+            "community": "snmpCommunity1",
+            "destination": "10.6.1.1",
+            "version": "2c",
+            "port": 162,
+            "network": "other"
+        },
+        "myTrapDestination_2": {
+            "class": "SnmpTrapDestination",
+            "community": "snmpCommunity1",
+            "destination": "10.7.1.1",
+            "version": "2c",
+            "port": 162,
+            "network": "other"
+        },
+        "myTrapEvents": {
+            "class": "SnmpTrapEvents",
+            "agentStartStop": true,
+            "device": true
+        },
+        "sshSettings": {
+            "class": "SSHD",
+            "banner": "This system (including all hardware, software, and peripheral equipment) is private property.",
+            "inactivityTimeout": 900
+        },
+        "remotesyslog1": {
+            "class": "SyslogRemoteServer",
+            "host": "10.8.1.1"
+        },
+        "remotesyslog2": {
+            "class": "SyslogRemoteServer",
+            "host": "10.9.1.1"
+        },
+        "mySystem": {
+            "class": "System",
+            "cliInactivityTimeout": 900,
+            "consoleInactivityTimeout": 15,
+            "autoPhonehome": false
+        },
+        "httpdSettings": {
+            "class": "HTTPD",
+            "allow": [
+                "10.0.0.0/8",
+                "172.16.0.0/12",
+                "192.168.0.0/16"
+            ],
+            "sslCiphersuite": [
+                "ECDHE-RSA-AES256-GCM-SHA384",
+                "ECDHE-RSA-AES256-SHA384",
+                "DHE-RSA-AES256-GCM-SHA384",
+                "DHE-RSA-AES256-SHA256",
+                "DHE-RSA-AES256-SHA",
+                "ECDH-RSA-AES256-GCM-SHA384",
+                "ECDH-RSA-AES256-SHA384",
+                "ECDH-RSA-AES256-SHA",
+                "AES256-GCM-SHA384",
+                "AES256-SHA256",
+                "AES256-SHA"
+            ],
+            "sslProtocol": "TLSv1.2"
+        }
+    }
+}
