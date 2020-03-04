@@ -6,6 +6,8 @@
     "Common": {
         "class": "Tenant",
         "hostname": "{{DO_vars.hostname}}",
+        "gui-security-banner": "enabled",
+        "gui-security-banner-text":"************************************************************************************ This system (including all hardware, software, and peripheral equipment) is private property. ************************************************************************************\"",
         "myDns": {  
             "class": "DNS",
             "nameServers": ["8.8.8.8"]

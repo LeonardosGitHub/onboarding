@@ -5,6 +5,8 @@
     "label": "vCMP guest build",
     "Common": {
         "class": "Tenant",
+        "gui-security-banner": "enabled",
+        "gui-security-banner-text":"************************************************************************************ This system (including all hardware, software, and peripheral equipment) is private property. ************************************************************************************\"",
         "mySystem": {
             "class": "System",
             "hostname": "{{DO_vars.hostname}}",
